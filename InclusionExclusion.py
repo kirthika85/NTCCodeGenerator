@@ -134,7 +134,7 @@ def correlate_patients_with_trials(patient_df, trial_df):
     return pd.DataFrame(correlated_results)
 
 
-st.title("Clinical Trial Criteria Batch Processor")
+st.title("Patient Trial Eligibility Checker")
 openai_api_key = st.sidebar.text_input('OpenAI API Key', type='password')
 
 uploaded_file = st.file_uploader("Upload Clinical Trial Criteria File", type=["xlsx", "xls", "csv"],
