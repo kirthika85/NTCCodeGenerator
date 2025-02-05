@@ -92,27 +92,35 @@ def correlate_patients_with_trials(patient_df, trial_df):
                 # Check if any word from the patient's diagnosis is in the inclusion criteria
                 patient_diagnosis_words = patient_row['Primary Diagnosis'].lower().split()
                 criteria_words = trial_row['Criteria'].lower().split()
-                if any(word in criteria_words for word in patient_diagnosis_words):
+                matched_criteria = [word for word in patient_diagnosis_words if word in criteria_words]
+                
+                if matched_criteria:
                     correlated_results.append({
                         'Patient Name': patient_row['Patient Name'],
                         'Patient ID': patient_row['Patient ID'],
                         'NCT Number': trial_row['NCT Number'],
                         'Study Title': trial_row['Study Title'],
                         'Type': 'Eligible',
-                        'Criteria': trial_row['Criteria']
+                        'Matched Criteria': ', '.join(matched_criteria),
+                        'Criteria Type': 'Inclusion',
+                        'Full Criteria': trial_row['Criteria']
                     })
             elif trial_row['Type'] == 'Exclusion':
                 # Check if any word from the patient's diagnosis is in the exclusion criteria
                 patient_diagnosis_words = patient_row['Primary Diagnosis'].lower().split()
                 criteria_words = trial_row['Criteria'].lower().split()
-                if any(word in criteria_words for word in patient_diagnosis_words):
+                matched_criteria = [word for word in patient_diagnosis_words if word in criteria_words]
+                
+                if matched_criteria:
                     correlated_results.append({
                         'Patient Name': patient_row['Patient Name'],
                         'Patient ID': patient_row['Patient ID'],
                         'NCT Number': trial_row['NCT Number'],
                         'Study Title': trial_row['Study Title'],
                         'Type': 'Not Eligible',
-                        'Criteria': trial_row['Criteria']
+                        'Matched Criteria': ', '.join(matched_criteria),
+                        'Criteria Type': 'Exclusion',
+                        'Full Criteria': trial_row['Criteria']
                     })
     
     return pd.DataFrame(correlated_results)
