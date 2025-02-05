@@ -83,11 +83,42 @@ def parse_criteria(llm, criteria_text):
         st.error(f"Parsing error: {str(e)}")
         return {"inclusion": [], "exclusion": []}
 
+def correlate_patients_with_trials(patient_df, trial_df):
+    correlated_results = []
+    
+    for _, patient_row in patient_df.iterrows():
+        for _, trial_row in trial_df.iterrows():
+            if trial_row['Type'] == 'Inclusion':
+                if patient_row['Primary Diagnosis'] in trial_row['Criteria']:
+                    correlated_results.append({
+                        'Patient Name': patient_row['Patient Name'],
+                        'Patient ID': patient_row['Patient ID'],
+                        'NCT Number': trial_row['NCT Number'],
+                        'Study Title': trial_row['Study Title'],
+                        'Type': 'Eligible',
+                        'Criteria': trial_row['Criteria']
+                    })
+            elif trial_row['Type'] == 'Exclusion':
+                if patient_row['Primary Diagnosis'] in trial_row['Criteria']:
+                    correlated_results.append({
+                        'Patient Name': patient_row['Patient Name'],
+                        'Patient ID': patient_row['Patient ID'],
+                        'NCT Number': trial_row['NCT Number'],
+                        'Study Title': trial_row['Study Title'],
+                        'Type': 'Not Eligible',
+                        'Criteria': trial_row['Criteria']
+                    })
+    
+    return pd.DataFrame(correlated_results)
+
 st.title("Clinical Trial Criteria Batch Processor")
 openai_api_key = st.sidebar.text_input('OpenAI API Key', type='password')
 
-uploaded_file = st.file_uploader("Upload File", type=["xlsx", "xls", "csv"],
+uploaded_file = st.file_uploader("Upload Clinical Trial Criteria File", type=["xlsx", "xls", "csv"],
                                 help="Supports Excel & CSV files with 'NCT Number' and 'Study Title' columns")
+
+patient_database_file = st.file_uploader("Upload Patient Database", type=["xlsx", "xls", "csv"],
+                                        help="Supports Excel & CSV files with patient data")
 
 if uploaded_file:
     try:
@@ -169,3 +200,32 @@ if uploaded_file:
                 
     except Exception as e:
         st.error(f"Error processing file: {str(e)}")
+
+if patient_database_file:
+    try:
+        if patient_database_file.name.endswith(('.xlsx', '.xls')):
+            patient_df = pd.read_excel(patient_database_file, engine='openpyxl', dtype=str)
+        else:
+            patient_df = pd.read_csv(patient_database_file, 
+                                   encoding='utf-8-sig',
+                                   engine='python',
+                                   dtype=str)
+        
+        if 'output_df' in locals():
+            correlated_df = correlate_patients_with_trials(patient_df, output_df)
+            
+            st.subheader("Correlated Results")
+            st.dataframe(correlated_df.head(10))
+            
+            csv = correlated_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="Download Correlated Results",
+                data=csv,
+                file_name="patient_trial_correlation.csv",
+                mime="text/csv"
+            )
+        else:
+            st.warning("Please upload clinical trial criteria first.")
+            
+    except Exception as e:
+        st.error(f"Error processing patient database: {str(e)}")
