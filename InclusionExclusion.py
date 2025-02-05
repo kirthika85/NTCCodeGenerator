@@ -2,13 +2,10 @@ import streamlit as st
 import pandas as pd
 import requests
 import json
-import time
-from urllib.parse import quote
 from langchain.chat_models import ChatOpenAI
-import os
 
+# Function to validate NCT ID format
 def validate_nct_id(nct_id):
-    """Validate NCT ID format according to ClinicalTrials.gov specifications"""
     return (
         isinstance(nct_id, str) and 
         nct_id.startswith('NCT') and 
@@ -16,9 +13,9 @@ def validate_nct_id(nct_id):
         nct_id[3:].isdigit()
     )
 
+# Function to fetch trial criteria from ClinicalTrials.gov API
 def fetch_trial_criteria(nct_id):
-    """Retrieve eligibility criteria from ClinicalTrials.gov API v2"""
-    api_url = f"https://clinicaltrials.gov/api/v2/studies/{quote(nct_id)}"
+    api_url = f"https://clinicaltrials.gov/api/v2/studies/{nct_id}"
     params = {
         "format": "json",
         "markupFormat": "markdown"
@@ -53,8 +50,8 @@ def fetch_trial_criteria(nct_id):
         st.error(f"Error fetching {nct_id}: {str(e)}")
         return None
 
+# Function to parse criteria text using LLM
 def parse_criteria(llm, criteria_text):
-    """Parse criteria text using LLM with enhanced validation"""
     if not criteria_text or len(criteria_text.strip()) < 50:
         return {"inclusion": [], "exclusion": []}
     
@@ -84,201 +81,59 @@ def parse_criteria(llm, criteria_text):
         st.error(f"Parsing error: {str(e)}")
         return {"inclusion": [], "exclusion": []}
 
-def correlate_patients_with_trials(patient_df, trial_df):
-    correlated_results = []
+# Function to correlate patients with trials
+def correlate_patient_with_trial(patient_row, trial_row):
+    patient_diagnosis_words = patient_row['Primary Diagnosis'].lower().split()
+    criteria_words = trial_row['Criteria'].lower().split()
     
-    for _, patient_row in patient_df.iterrows():
-        matched = False
-        for _, trial_row in trial_df.iterrows():
-            if trial_row['Type'] == 'Inclusion':
-                # Check if any word from the patient's diagnosis is in the inclusion criteria
-                patient_diagnosis_words = patient_row['Primary Diagnosis'].lower().split()
-                criteria_words = trial_row['Criteria'].lower().split()
-                if any(word in criteria_words for word in patient_diagnosis_words):
-                    correlated_results.append({
-                        'Patient Name': patient_row['Patient Name'],
-                        'Patient ID': patient_row['Patient ID'],
-                        'NCT Number': trial_row['NCT Number'],
-                        'Study Title': trial_row['Study Title'],
-                        'Type': 'Eligible',
-                        'Criteria Type': 'Inclusion',
-                        'Full Criteria': trial_row['Criteria']
-                    })
-                    matched = True
-            elif trial_row['Type'] == 'Exclusion':
-                # Check if any word from the patient's diagnosis is in the exclusion criteria
-                patient_diagnosis_words = patient_row['Primary Diagnosis'].lower().split()
-                criteria_words = trial_row['Criteria'].lower().split()
-                if any(word in criteria_words for word in patient_diagnosis_words):
-                    correlated_results.append({
-                        'Patient Name': patient_row['Patient Name'],
-                        'Patient ID': patient_row['Patient ID'],
-                        'NCT Number': trial_row['NCT Number'],
-                        'Study Title': trial_row['Study Title'],
-                        'Type': 'Not Eligible',
-                        'Criteria Type': 'Exclusion',
-                        'Full Criteria': trial_row['Criteria']
-                    })
-                    matched = True
-        
-        if not matched:
-            correlated_results.append({
-                'Patient Name': patient_row['Patient Name'],
-                'Patient ID': patient_row['Patient ID'],
-                'NCT Number': trial_row['NCT Number'],
-                'Study Title': trial_row['Study Title'],
-                'Type': 'Not Eligible',
-                'Criteria Type': 'No Criteria Match',
-                'Full Criteria': trial_row['Criteria']
-            })
+    if any(word in criteria_words for word in patient_diagnosis_words):
+        return "Yes"
+    else:
+        return "No"
+
+# Load files
+uploaded_files = st.file_uploader("Upload files", type=["xlsx", "xls", "csv"], accept_multiple_files=True)
+
+if len(uploaded_files) >= 2:
+    clinical_trial_file = uploaded_files[0]
+    patient_database_file = uploaded_files[1]
     
-    return pd.DataFrame(correlated_results)
-
-
-#Main Funciton
-st.set_page_config(page_title="Patient Trial Eligibility Checker", page_icon="🩺", layout="wide")
-#st.image("Mool.png", width=100)
-
-col1, col2 = st.columns([1, 6])
-with col1:
-    st.image("Mool.png", width=150)
-
-with col2:
-    st.markdown(
-        "<h1 style='margin-top: 10px;'>Patient Trial Eligibility Checker</h1>",
-        unsafe_allow_html=True
-    )
-
-
-with st.spinner("🔄 Mool AI agent Authentication In progress..."):
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        st.error("❌ API_KEY not found in environment variables.")
-        st.stop()
-    time.sleep(5)
-st.success("✅ Mool AI agent Authentication Successful")
-
-
-
-uploaded_file = st.file_uploader("Upload Clinical Trial Criteria File", type=["xlsx", "xls", "csv"],
-                                help="Supports Excel & CSV files with 'NCT Number' and 'Study Title' columns")
-
-patient_database_file = st.file_uploader("Upload Patient Database", type=["xlsx", "xls", "csv"],
-                                        help="Supports Excel & CSV files with patient data")
-
-if uploaded_file:
-    try:
-        if uploaded_file.name.endswith(('.xlsx', '.xls')):
-            df = pd.read_excel(uploaded_file, engine='openpyxl', dtype=str)
-        else:
-            df = pd.read_csv(uploaded_file, 
-                           encoding='utf-8-sig',
-                           engine='python',
-                           dtype=str)
-
-        required_cols = {'NCT Number', 'Study Title'}
-        if not required_cols.issubset(df.columns):
-            st.error("Uploaded file must contain 'NCT Number' and 'Study Title' columns")
-            st.stop()
-
-        df['NCT Number'] = df['NCT Number'].str.strip().str.upper()
-        invalid_ids = df[~df['NCT Number'].apply(validate_nct_id)]['NCT Number'].tolist()
-        
-        if invalid_ids:
-            st.error(f"Invalid NCT ID format detected: {', '.join(invalid_ids[:3])}...")
-            st.stop()
-
+    # Load data
+    trial_df = pd.read_excel(clinical_trial_file, engine='openpyxl', dtype=str)
+    patient_df = pd.read_excel(patient_database_file, engine='openpyxl', dtype=str)
+    
+    # Extract NCT numbers and patient names
+    nct_numbers = trial_df['NCT Number'].tolist()
+    patient_names = patient_df['Patient Name'].tolist()
+    
+    # Create dropdowns
+    selected_nct = st.selectbox("Select NCT Number", nct_numbers)
+    selected_patient = st.selectbox("Select Patient Name", patient_names)
+    
+    # Input OpenAI API Key
+    openai_api_key = st.text_input("Enter OpenAI API Key")
+    
+    if openai_api_key:
         llm = ChatOpenAI(openai_api_key=openai_api_key, model="gpt-4", temperature=0.1)
-        results = {}
         
-        # Initialize progress bar
-        progress_bar = st.progress(0)
-        total_trials = len(df)
-        
-        for index, row in df.iterrows():
-            nct_id = row['NCT Number']
-            st.write(f"Processing {nct_id}...")
+        # Fetch and parse criteria for selected trial
+        criteria_text = fetch_trial_criteria(selected_nct)
+        if criteria_text:
+            parsed_criteria = parse_criteria(llm, criteria_text)
             
-            criteria_text = fetch_trial_criteria(nct_id)
-            time.sleep(1)  # Rate limiting
+            # Display inclusion and exclusion criteria with eligibility
+            selected_patient_row = patient_df[patient_df['Patient Name'] == selected_patient].iloc[0]
             
-            if not criteria_text:
-                continue
+            st.write("### Inclusion Criteria:")
+            for criterion in parsed_criteria['inclusion']:
+                eligibility = "Yes" if criterion.lower() in selected_patient_row['Primary Diagnosis'].lower() else "No"
+                st.write(f"**Criterion:** {criterion}")
+                st.write(f"**Is Patient Included:** {eligibility}")
+                st.write("")
             
-            parsed = parse_criteria(llm, criteria_text)
-            
-            # Group results by NCT ID
-            results[nct_id] = {
-                'Study Title': row['Study Title'],
-                'Inclusion Criteria': parsed.get('inclusion', []),
-                'Exclusion Criteria': parsed.get('exclusion', [])
-            }
-            
-            # Update progress bar
-            progress = (index + 1) / total_trials
-            progress_bar.progress(progress)
-        
-        progress_bar.empty()  # Clear progress bar after completion
-        
-        if results:
-            # Convert grouped results to DataFrame
-            output_data = []
-            for nct_id, result in results.items():
-                output_data.append({
-                    'NCT Number': nct_id,
-                    'Study Title': result['Study Title'],
-                    'Type': 'Inclusion',
-                    'Criteria': '\n'.join(result['Inclusion Criteria'])
-                })
-                output_data.append({
-                    'NCT Number': nct_id,
-                    'Study Title': result['Study Title'],
-                    'Type': 'Exclusion',
-                    'Criteria': '\n'.join(result['Exclusion Criteria'])
-                })
-            
-            output_df = pd.DataFrame(output_data)
-            st.subheader("Preview")
-            st.dataframe(output_df.head(10))
-            
-            csv = output_df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="Download CSV Results",
-                data=csv,
-                file_name="clinical_trial_criteria.csv",
-                mime="text/csv"
-            )
-        else:
-            st.warning("No valid criteria found in uploaded trials")
-                
-    except Exception as e:
-        st.error(f"Error processing file: {str(e)}")
-
-if patient_database_file:
-    try:
-        if patient_database_file.name.endswith(('.xlsx', '.xls')):
-            patient_df = pd.read_excel(patient_database_file, engine='openpyxl', dtype=str)
-        else:
-            patient_df = pd.read_csv(patient_database_file, 
-                                   encoding='utf-8-sig',
-                                   engine='python',
-                                   dtype=str)
-        
-        if 'output_df' in locals():
-            correlated_df = correlate_patients_with_trials(patient_df, output_df)
-            
-            st.subheader("Correlated Results")
-            st.dataframe(correlated_df.head(10))
-            
-            csv = correlated_df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="Download Correlated Results",
-                data=csv,
-                file_name="patient_trial_correlation.csv",
-                mime="text/csv"
-            )
-        else:
-            st.warning("Please upload clinical trial criteria first.")
-            
-    except Exception as e:
-        st.error(f"Error processing patient database: {str(e)}")
+            st.write("### Exclusion Criteria:")
+            for criterion in parsed_criteria['exclusion']:
+                eligibility = "Yes" if criterion.lower() in selected_patient_row['Primary Diagnosis'].lower() else "No"
+                st.write(f"**Criterion:** {criterion}")
+                st.write(f"**Is Patient Excluded:** {eligibility}")
+                st.write("")
