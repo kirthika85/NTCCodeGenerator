@@ -5,6 +5,7 @@ import json
 import time
 from urllib.parse import quote
 from langchain.chat_models import ChatOpenAI
+import os
 
 def validate_nct_id(nct_id):
     """Validate NCT ID format according to ClinicalTrials.gov specifications"""
