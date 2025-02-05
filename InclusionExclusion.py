@@ -40,7 +40,7 @@ st.title("Clinical Trial Criteria Batch Processor")
 openai_api_key = st.sidebar.text_input('OpenAI API Key', type='password')
 
 uploaded_file = st.file_uploader("Upload File", type=["xlsx", "xls", "csv"],
-                                help="Supports Excel & CSV files with 'NCT Code' and 'Study Name' columns")
+                                help="Supports Excel & CSV files with 'NCT Number' and 'Study Title' columns")
 
 if uploaded_file:
     try:
