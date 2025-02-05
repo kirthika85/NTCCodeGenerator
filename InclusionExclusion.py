@@ -52,7 +52,7 @@ if uploaded_file:
                            encoding='utf-8-sig',  # Handles BOM markers
                            engine='python')        # Better error handling
             
-        required_cols = {'NCT Code', 'Study Name'}
+        required_cols = {'NCT Number', 'Study Title'}
         
         if not required_cols.issubset(df.columns):
             st.error("Uploaded file must contain 'NCT Code' and 'Study Name' columns")
