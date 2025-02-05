@@ -156,6 +156,8 @@ if len(uploaded_files) >= 2 and openai_api_key:
             inclusion_table = []
             selected_patient_row = patient_df[patient_df['Patient Name'] == selected_patient].iloc[0]
             for i, criterion in enumerate(parsed_criteria['inclusion'], start=1):
+                if criterion.strip().lower().startswith("registration #"):
+                    continue
                 eligibility = correlate_patient_with_trial(llm, selected_patient_row, criterion)
                 inclusion_table.append({
                     'Criterion #': i,
