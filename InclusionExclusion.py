@@ -20,48 +20,43 @@ def fetch_trial_criteria(nct_id):
     api_url = f"https://clinicaltrials.gov/api/v2/studies/{quote(nct_id)}"
     params = {
         "format": "json",
-        "markupFormat": "markdown"  # Added from working curl example
+        "markupFormat": "markdown"
     }
     headers = {
-        "Accept": "text/csv, application/json",  # Mirror curl's accept header
+        "Accept": "text/csv, application/json",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
     try:
         response = requests.get(api_url, headers=headers, params=params, timeout=15)
         
-        # Add verbose logging for API interaction
-        st.write(f"API Request Details:\nURL: {response.url}\nStatus: {response.status_code}\nHeaders: {response.headers}")
-        
         if response.status_code == 400:
-            st.error(f"Temporary API error for {nct_id} - try again later")
+            st.error(f"Invalid request for {nct_id} - check API parameters")
             return None
             
         if response.status_code != 200:
             st.error(f"API Error {response.status_code} for {nct_id}")
             return None
 
-        # Handle JSON despite text/csv accept header
         data = response.json()
         
-        # Diagnostic output
-        if 'protocolSection' not in data:
-            st.error(f"Unexpected response structure for {nct_id}")
-            st.json(data)  # Show raw response for debugging
+        # Validate API response structure
+        eligibility_module = data.get('protocolSection', {}).get('eligibilityModule', {})
+        if not eligibility_module:
+            st.error(f"No eligibility data found for {nct_id}")
             return None
             
-        return data.get('protocolSection', {}).get('eligibilityModule', {}).get('eligibilityCriteria')
+        return eligibility_module.get('eligibilityCriteria')
 
     except Exception as e:
         st.error(f"Error fetching {nct_id}: {str(e)}")
         return None
- 
+
 def parse_criteria(llm, criteria_text):
     """Parse criteria text using LLM with enhanced validation"""
     if not criteria_text or len(criteria_text.strip()) < 50:
         return {"inclusion": [], "exclusion": []}
     
-    # Updated prompt based on example response structure
     prompt = f"""Convert this clinical trial criteria into JSON format with separate inclusion/exclusion lists.
     Use exactly this structure:
     {{
@@ -69,7 +64,7 @@ def parse_criteria(llm, criteria_text):
         "exclusion": ["list", "of", "criteria"]
     }}
     
-    Input Text (preserve markdown formatting):
+    Input Text:
     {criteria_text}
     """
     try:
@@ -117,7 +112,7 @@ if uploaded_file:
             st.stop()
 
         llm = ChatOpenAI(openai_api_key=openai_api_key, model="gpt-4", temperature=0.1)
-        results = []
+        results = {}
         
         with st.status("Processing trials...", expanded=True) as status:
             for _, row in df.iterrows():
@@ -132,27 +127,33 @@ if uploaded_file:
                 
                 parsed = parse_criteria(llm, criteria_text)
                 
-                # Add debug information with full criteria text
-                debug_info = {
-                    'nct_id': nct_id,
-                    'criteria_text': criteria_text,
-                    'parsed_result': parsed
+                # Group results by NCT ID
+                results[nct_id] = {
+                    'Study Title': row['Study Title'],
+                    'Inclusion Criteria': parsed.get('inclusion', []),
+                    'Exclusion Criteria': parsed.get('exclusion', [])
                 }
-                st.session_state.setdefault('debug_data', []).append(debug_info)
-
-                for criterion_type in ['inclusion', 'exclusion']:
-                    for criterion in parsed.get(criterion_type, []):
-                        results.append({
-                            'NCT Number': nct_id,
-                            'Study Title': row['Study Title'],
-                            'Type': criterion_type.capitalize(),
-                            'Criterion': criterion
-                        })
             
             status.update(label="Processing complete!", state="complete")
 
         if results:
-            output_df = pd.DataFrame(results)
+            # Convert grouped results to DataFrame
+            output_data = []
+            for nct_id, result in results.items():
+                output_data.append({
+                    'NCT Number': nct_id,
+                    'Study Title': result['Study Title'],
+                    'Type': 'Inclusion',
+                    'Criteria': '\n'.join(result['Inclusion Criteria'])
+                })
+                output_data.append({
+                    'NCT Number': nct_id,
+                    'Study Title': result['Study Title'],
+                    'Type': 'Exclusion',
+                    'Criteria': '\n'.join(result['Exclusion Criteria'])
+                })
+            
+            output_df = pd.DataFrame(output_data)
             st.subheader("Preview (First 10 Rows)")
             st.dataframe(output_df.head(10))
             
@@ -165,9 +166,6 @@ if uploaded_file:
             )
         else:
             st.warning("No valid criteria found in uploaded trials")
-            if st.button("Show Debug Info"):
-                st.write("Debug Information:")
-                st.json(st.session_state.get('debug_data', []))
                 
     except Exception as e:
         st.error(f"Error processing file: {str(e)}")
