@@ -124,11 +124,11 @@ def correlate_patients_with_trials(patient_df, trial_df):
             correlated_results.append({
                 'Patient Name': patient_row['Patient Name'],
                 'Patient ID': patient_row['Patient ID'],
-                'NCT Number': 'No Match',
-                'Study Title': 'No Matching Trial',
+                'NCT Number': first_trial_row['NCT Number'],
+                'Study Title': first_trial_row['Study Title'],
                 'Type': 'Not Eligible',
                 'Criteria Type': 'No Criteria Match',
-                'Full Criteria': 'No matching criteria found'
+                'Full Criteria': trial_row['Criteria']
             })
     
     return pd.DataFrame(correlated_results)
