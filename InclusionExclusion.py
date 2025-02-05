@@ -89,7 +89,10 @@ def correlate_patients_with_trials(patient_df, trial_df):
     for _, patient_row in patient_df.iterrows():
         for _, trial_row in trial_df.iterrows():
             if trial_row['Type'] == 'Inclusion':
-                if patient_row['Primary Diagnosis'] in trial_row['Criteria']:
+                # Check if any word from the patient's diagnosis is in the inclusion criteria
+                patient_diagnosis_words = patient_row['Primary Diagnosis'].lower().split()
+                criteria_words = trial_row['Criteria'].lower().split()
+                if any(word in criteria_words for word in patient_diagnosis_words):
                     correlated_results.append({
                         'Patient Name': patient_row['Patient Name'],
                         'Patient ID': patient_row['Patient ID'],
@@ -99,7 +102,10 @@ def correlate_patients_with_trials(patient_df, trial_df):
                         'Criteria': trial_row['Criteria']
                     })
             elif trial_row['Type'] == 'Exclusion':
-                if patient_row['Primary Diagnosis'] in trial_row['Criteria']:
+                # Check if any word from the patient's diagnosis is in the exclusion criteria
+                patient_diagnosis_words = patient_row['Primary Diagnosis'].lower().split()
+                criteria_words = trial_row['Criteria'].lower().split()
+                if any(word in criteria_words for word in patient_diagnosis_words):
                     correlated_results.append({
                         'Patient Name': patient_row['Patient Name'],
                         'Patient ID': patient_row['Patient ID'],
@@ -145,28 +151,35 @@ if uploaded_file:
         llm = ChatOpenAI(openai_api_key=openai_api_key, model="gpt-4", temperature=0.1)
         results = {}
         
-        with st.status("Processing trials...", expanded=True) as status:
-            for _, row in df.iterrows():
-                nct_id = row['NCT Number']
-                st.write(f"Processing {nct_id}...")
-                
-                criteria_text = fetch_trial_criteria(nct_id)
-                time.sleep(1)  # Rate limiting
-                
-                if not criteria_text:
-                    continue
-                
-                parsed = parse_criteria(llm, criteria_text)
-                
-                # Group results by NCT ID
-                results[nct_id] = {
-                    'Study Title': row['Study Title'],
-                    'Inclusion Criteria': parsed.get('inclusion', []),
-                    'Exclusion Criteria': parsed.get('exclusion', [])
-                }
+        # Initialize progress bar
+        progress_bar = st.progress(0)
+        total_trials = len(df)
+        
+        for index, row in df.iterrows():
+            nct_id = row['NCT Number']
+            st.write(f"Processing {nct_id}...")
             
-            status.update(label="Processing complete!", state="complete")
-
+            criteria_text = fetch_trial_criteria(nct_id)
+            time.sleep(1)  # Rate limiting
+            
+            if not criteria_text:
+                continue
+            
+            parsed = parse_criteria(llm, criteria_text)
+            
+            # Group results by NCT ID
+            results[nct_id] = {
+                'Study Title': row['Study Title'],
+                'Inclusion Criteria': parsed.get('inclusion', []),
+                'Exclusion Criteria': parsed.get('exclusion', [])
+            }
+            
+            # Update progress bar
+            progress = (index + 1) / total_trials
+            progress_bar.progress(progress)
+        
+        progress_bar.empty()  # Clear progress bar after completion
+        
         if results:
             # Convert grouped results to DataFrame
             output_data = []
