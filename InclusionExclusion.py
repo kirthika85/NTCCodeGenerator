@@ -20,7 +20,8 @@ def fetch_trial_criteria(nct_id):
     api_url = f"https://clinicaltrials.gov/api/v2/studies/{quote(nct_id)}"
     params = {
         "format": "json",
-        "version": "2.0.1"
+        "version": "2.0.1",
+        "fields": "protocolSection.eligibilityModule"
     }
     headers = {
         "Accept": "application/json",
@@ -31,6 +32,7 @@ def fetch_trial_criteria(nct_id):
         response = requests.get(api_url, headers=headers, params=params, timeout=15)
         
         if response.status_code == 400:
+            st.error(f"Invalid request for {nct_id} - check ID format")
             return None
             
         if response.status_code != 200:
@@ -40,10 +42,12 @@ def fetch_trial_criteria(nct_id):
         data = response.json()
         
         # Validate API response structure
-        if not data.get('protocolSection', {}).get('eligibilityModule'):
+        eligibility_module = data.get('protocolSection', {}).get('eligibilityModule', {})
+        if not eligibility_module:
+            st.error(f"No eligibility data found for {nct_id}")
             return None
             
-        return data['protocolSection']['eligibilityModule']['eligibilityCriteria']
+        return eligibility_module.get('eligibilityCriteria')
 
     except Exception as e:
         st.error(f"Error fetching {nct_id}: {str(e)}")
@@ -51,6 +55,9 @@ def fetch_trial_criteria(nct_id):
 
 def parse_criteria(llm, criteria_text):
     """Parse criteria text using LLM with enhanced validation"""
+    if not criteria_text or len(criteria_text.strip()) < 50:
+        return {"inclusion": [], "exclusion": []}
+    
     prompt = f"""Convert this clinical trial criteria into JSON format with separate inclusion/exclusion lists.
     Use exactly this structure:
     {{
@@ -65,11 +72,14 @@ def parse_criteria(llm, criteria_text):
         result = llm.invoke(prompt).content
         parsed = json.loads(result.strip('` \n'))
         
-        # Validate LLM output structure
-        if not isinstance(parsed.get('inclusion', []), list) or not isinstance(parsed.get('exclusion', []), list):
+        # Validate response structure
+        if not isinstance(parsed.get('inclusion'), list) or not isinstance(parsed.get('exclusion'), list):
             raise ValueError("Invalid LLM response structure")
             
         return parsed
+    except json.JSONDecodeError:
+        st.error("Failed to parse LLM response as JSON")
+        return {"inclusion": [], "exclusion": []}
     except Exception as e:
         st.error(f"Parsing error: {str(e)}")
         return {"inclusion": [], "exclusion": []}
@@ -82,7 +92,6 @@ uploaded_file = st.file_uploader("Upload File", type=["xlsx", "xls", "csv"],
 
 if uploaded_file:
     try:
-        # File processing
         if uploaded_file.name.endswith(('.xlsx', '.xls')):
             df = pd.read_excel(uploaded_file, engine='openpyxl', dtype=str)
         else:
@@ -91,13 +100,11 @@ if uploaded_file:
                            engine='python',
                            dtype=str)
 
-        # Validate columns
         required_cols = {'NCT Number', 'Study Title'}
         if not required_cols.issubset(df.columns):
             st.error("Uploaded file must contain 'NCT Number' and 'Study Title' columns")
             st.stop()
 
-        # Clean and validate NCT IDs
         df['NCT Number'] = df['NCT Number'].str.strip().str.upper()
         invalid_ids = df[~df['NCT Number'].apply(validate_nct_id)]['NCT Number'].tolist()
         
@@ -121,7 +128,14 @@ if uploaded_file:
                 
                 parsed = parse_criteria(llm, criteria_text)
                 
-                # Process criteria
+                # Add debug information
+                debug_info = {
+                    'nct_id': nct_id,
+                    'criteria_text_snippet': criteria_text[:200] + '...' if criteria_text else '',
+                    'parsed_result': parsed
+                }
+                st.session_state.setdefault('debug_data', []).append(debug_info)
+
                 for criterion_type in ['inclusion', 'exclusion']:
                     for criterion in parsed.get(criterion_type, []):
                         results.append({
@@ -147,6 +161,9 @@ if uploaded_file:
             )
         else:
             st.warning("No valid criteria found in uploaded trials")
+            if st.button("Show Debug Info"):
+                st.write("Debug Information:")
+                st.json(st.session_state.get('debug_data', []))
                 
     except Exception as e:
         st.error(f"Error processing file: {str(e)}")
