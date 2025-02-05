@@ -20,19 +20,19 @@ def fetch_trial_criteria(nct_id):
     api_url = f"https://clinicaltrials.gov/api/v2/studies/{quote(nct_id)}"
     params = {
         "format": "json",
-        "version": "2.0.1",
-        "fields": "protocolSection.eligibilityModule"
+        "version": "2.0",  # Changed from 2.0.1 to match API response structure
+        "markupFormat": "html"  # Added to match example response format
     }
     headers = {
         "Accept": "application/json",
-        "User-Agent": "ClinicalTrialsProcessor/1.0 (contact@example.com)"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
     try:
         response = requests.get(api_url, headers=headers, params=params, timeout=15)
         
         if response.status_code == 400:
-            st.error(f"Invalid request for {nct_id} - check ID format")
+            st.error(f"Invalid request for {nct_id} - check API parameters")
             return None
             
         if response.status_code != 200:
@@ -41,13 +41,12 @@ def fetch_trial_criteria(nct_id):
 
         data = response.json()
         
-        # Validate API response structure
-        eligibility_module = data.get('protocolSection', {}).get('eligibilityModule', {})
-        if not eligibility_module:
-            st.error(f"No eligibility data found for {nct_id}")
+        # Validate API response structure based on search results example
+        if not data.get('protocolSection', {}).get('eligibilityModule'):
+            st.error(f"No eligibility criteria found for {nct_id}")
             return None
             
-        return eligibility_module.get('eligibilityCriteria')
+        return data['protocolSection']['eligibilityModule'].get('eligibilityCriteria')
 
     except Exception as e:
         st.error(f"Error fetching {nct_id}: {str(e)}")
@@ -58,6 +57,7 @@ def parse_criteria(llm, criteria_text):
     if not criteria_text or len(criteria_text.strip()) < 50:
         return {"inclusion": [], "exclusion": []}
     
+    # Updated prompt based on example response structure
     prompt = f"""Convert this clinical trial criteria into JSON format with separate inclusion/exclusion lists.
     Use exactly this structure:
     {{
@@ -65,7 +65,7 @@ def parse_criteria(llm, criteria_text):
         "exclusion": ["list", "of", "criteria"]
     }}
     
-    Input Text:
+    Input Text (preserve markdown formatting):
     {criteria_text}
     """
     try:
@@ -128,10 +128,10 @@ if uploaded_file:
                 
                 parsed = parse_criteria(llm, criteria_text)
                 
-                # Add debug information
+                # Add debug information with full criteria text
                 debug_info = {
                     'nct_id': nct_id,
-                    'criteria_text_snippet': criteria_text[:200] + '...' if criteria_text else '',
+                    'criteria_text': criteria_text,
                     'parsed_result': parsed
                 }
                 st.session_state.setdefault('debug_data', []).append(debug_info)
