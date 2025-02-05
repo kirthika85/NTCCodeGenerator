@@ -101,3 +101,12 @@ if uploaded_file:
                 csv = output_df.to_csv(index=False).encode('utf-8')
                 st.download_button(
                     label="Download CSV Results",
+                    data=csv,
+                    file_name="clinical_trial_criteria.csv",
+                    mime="text/csv"
+                )
+            else:
+                st.warning("No valid criteria found in uploaded trials")
+                
+    except Exception as e:
+        st.error(f"Error processing file: {str(e)}")
