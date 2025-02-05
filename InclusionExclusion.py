@@ -3,7 +3,6 @@ import pandas as pd
 import requests
 import json
 from langchain.chat_models import ChatOpenAI
-from io import StringIO
 
 def fetch_trial_criteria(nct_id):
     """Retrieve eligibility criteria from ClinicalTrials.gov API"""
@@ -37,66 +36,76 @@ def parse_criteria(llm, criteria_text):
         st.error(f"Parsing error: {str(e)}")
         return {"inclusion": [], "exclusion": []}
 
-# Streamlit UI Components (FIXED INDENTATION)
 st.title("Clinical Trial Criteria Batch Processor")
 openai_api_key = st.sidebar.text_input('OpenAI API Key', type='password')
 
-# File upload section
-uploaded_file = st.file_uploader("Upload CSV file", type=["xlsx", "xls", "csv"],
-                                help="CSV must contain 'NCT Code' and 'Study Name' columns")
+uploaded_file = st.file_uploader("Upload File", type=["xlsx", "xls", "csv"],
+                                help="Supports Excel & CSV files with 'NCT Code' and 'Study Name' columns")
 
 if uploaded_file:
-    df = pd.read_csv(uploaded_file)
-    required_cols = {'NCT Code', 'Study Name'}
-    
-    if not required_cols.issubset(df.columns):
-        st.error("CSV must contain 'NCT Code' and 'Study Name' columns")
-    else:
-        llm = ChatOpenAI(openai_api_key=openai_api_key, model="gpt-4", temperature=0.1)
-        results = []
-        
-        with st.status("Processing trials...", expanded=True) as status:
-            for _, row in df.iterrows():
-                nct_id = row['NCT Code'].strip()
-                st.write(f"Processing {nct_id}...")
-                
-                criteria_text = fetch_trial_criteria(nct_id)
-                if not criteria_text:
-                    continue
-                
-                parsed = parse_criteria(llm, criteria_text)
-                
-                # Create structured entries
-                for criterion in parsed.get('inclusion', []):
-                    results.append({
-                        'NCT Code': nct_id,
-                        'Study Name': row['Study Name'],
-                        'Type': 'Inclusion',
-                        'Criterion': criterion
-                    })
-                
-                for criterion in parsed.get('exclusion', []):
-                    results.append({
-                        'NCT Code': nct_id,
-                        'Study Name': row['Study Name'],
-                        'Type': 'Exclusion',
-                        'Criterion': criterion
-                    })
-            
-            status.update(label="Processing complete!", state="complete")
-        
-        if results:
-            output_df = pd.DataFrame(results)
-            st.subheader("Preview (First 10 Rows)")
-            st.dataframe(output_df.head(10))
-            
-            # Generate CSV
-            csv = output_df.to_csv(index=False)
-            st.download_button(
-                label="Download Full Results",
-                data=csv,
-                file_name="clinical_trial_criteria.csv",
-                mime="text/csv"
-            )
+    try:
+        if uploaded_file.name.endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(uploaded_file)
         else:
-            st.warning("No valid criteria found in uploaded trials")
+            # Handle CSV with proper encoding
+            df = pd.read_csv(uploaded_file, 
+                           encoding='utf-8-sig',  # Handles BOM markers
+                           engine='python')        # Better error handling
+            
+        required_cols = {'NCT Code', 'Study Name'}
+        
+        if not required_cols.issubset(df.columns):
+            st.error("Uploaded file must contain 'NCT Code' and 'Study Name' columns")
+        else:
+            llm = ChatOpenAI(openai_api_key=openai_api_key, model="gpt-4", temperature=0.1)
+            results = []
+            
+            with st.status("Processing trials...", expanded=True) as status:
+                for _, row in df.iterrows():
+                    nct_id = row['NCT Code'].strip()
+                    st.write(f"Processing {nct_id}...")
+                    
+                    criteria_text = fetch_trial_criteria(nct_id)
+                    if not criteria_text:
+                        continue
+                    
+                    parsed = parse_criteria(llm, criteria_text)
+                    
+                    # Create structured entries
+                    for criterion in parsed.get('inclusion', []):
+                        results.append({
+                            'NCT Code': nct_id,
+                            'Study Name': row['Study Name'],
+                            'Type': 'Inclusion',
+                            'Criterion': criterion
+                        })
+                    
+                    for criterion in parsed.get('exclusion', []):
+                        results.append({
+                            'NCT Code': nct_id,
+                            'Study Name': row['Study Name'],
+                            'Type': 'Exclusion',
+                            'Criterion': criterion
+                        })
+                
+                status.update(label="Processing complete!", state="complete")
+            
+            if results:
+                output_df = pd.DataFrame(results)
+                st.subheader("Preview (First 10 Rows)")
+                st.dataframe(output_df.head(10))
+                
+                csv = output_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Download CSV Results",
+                    data=csv,
+                    file_name="clinical_trial_criteria.csv",
+                    mime="text/csv"
+                )
+            else:
+                st.warning("No valid criteria found in uploaded trials")
+                
+    except UnicodeDecodeError:
+        st.error("""Encoding error! Try:
+                1. Re-saving CSV with UTF-8 encoding
+                2. Try different encoding: pd.read_csv(..., encoding='latin1')""")
