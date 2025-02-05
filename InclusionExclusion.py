@@ -154,7 +154,7 @@ if uploaded_file:
                 })
             
             output_df = pd.DataFrame(output_data)
-            st.subheader("Preview (First 10 Rows)")
+            st.subheader("Preview")
             st.dataframe(output_df.head(10))
             
             csv = output_df.to_csv(index=False).encode('utf-8')
