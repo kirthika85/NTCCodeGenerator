@@ -124,6 +124,29 @@ def correlate_patient_with_trial(llm, patient_row, criterion):
 with st.sidebar:
     openai_api_key = st.text_input("Enter OpenAI API Key")
 
+#Main Funciton
+st.set_page_config(page_title="Patient Trial Eligibility Checker", page_icon="🩺", layout="wide")
+#st.image("Mool.png", width=100)
+
+col1, col2 = st.columns([1, 6])
+with col1:
+    st.image("Mool.png", width=150)
+
+with col2:
+    st.markdown(
+        "<h1 style='margin-top: 10px;'>Patient Trial Eligibility Checker</h1>",
+        unsafe_allow_html=True
+    )
+
+with st.spinner("🔄 Mool AI agent Authentication In progress..."):
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        st.error("❌ API_KEY not found in environment variables.")
+        st.stop()
+    time.sleep(5)
+st.success("✅ Mool AI agent Authentication Successful")
+
+
 # Load files
 uploaded_files = st.file_uploader("Upload files", type=["xlsx", "xls", "csv"], accept_multiple_files=True)
 
@@ -158,6 +181,7 @@ if len(uploaded_files) >= 2 and openai_api_key:
             # Display inclusion criteria in a table
             inclusion_table = []
             selected_patient_row = patient_df[patient_df['Patient Name'] == selected_patient].iloc[0]
+            inclusion_score_numerator=0
             for i, criterion in enumerate(parsed_criteria['inclusion'], start=1):
                 if criterion.strip().lower().startswith("registration #"):
                     continue
@@ -167,13 +191,23 @@ if len(uploaded_files) >= 2 and openai_api_key:
                     'Inclusion Criterion': criterion,
                     'Is Patient Included': eligibility
                 })
+                if eligibility == "Yes":
+                    inclusion_score_numerator += 1
             
             inclusion_df = pd.DataFrame(inclusion_table)
             st.write("### Inclusion Criteria:")
             st.dataframe(inclusion_df)
+
+            inclusion_score_denominator = len(inclusion_table)
+            if inclusion_score_denominator > 0:
+                inclusion_score = (inclusion_score_numerator / inclusion_score_denominator) * 100
+                st.write(f"**Inclusion Score:** {inclusion_score_numerator} / {inclusion_score_denominator} = {inclusion_score:.2f}%")
+            else:
+                st.write("No inclusion criteria to evaluate.")
             
             # Display exclusion criteria in a table
             exclusion_table = []
+            exclusion_score_numerator=0
             for i, criterion in enumerate(parsed_criteria['exclusion'], start=1):
                 eligibility = correlate_patient_with_trial(llm, selected_patient_row, criterion)
                 exclusion_table.append({
@@ -181,9 +215,18 @@ if len(uploaded_files) >= 2 and openai_api_key:
                     'Exclusion Criterion': criterion,
                     'Is Patient Excluded': eligibility
                 })
+                if eligibility == "Yes":
+                    exclusion_score_numerator += 1
             
             exclusion_df = pd.DataFrame(exclusion_table)
             st.write("### Exclusion Criteria:")
             st.dataframe(exclusion_df)
+            
+            exclusion_score_denominator = len(exclusion_table)
+            if exclusion_score_denominator > 0:
+                exclusion_score = (exclusion_score_numerator / exclusion_score_denominator) * 100
+                st.write(f"**Exclusion Score:** {exclusion_score_numerator} / {exclusion_score_denominator} = {exclusion_score:.2f}%")
+            else:
+                st.write("No exclusion criteria to evaluate.")
         else:
             st.error("No eligibility criteria found for the selected trial.")
