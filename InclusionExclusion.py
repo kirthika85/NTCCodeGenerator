@@ -91,10 +91,14 @@ def correlate_patient_with_trial(patient_row, trial_row):
     else:
         return "No"
 
+# Sidebar for OpenAI API Key
+with st.sidebar:
+    openai_api_key = st.text_input("Enter OpenAI API Key")
+
 # Load files
 uploaded_files = st.file_uploader("Upload files", type=["xlsx", "xls", "csv"], accept_multiple_files=True)
 
-if len(uploaded_files) >= 2:
+if len(uploaded_files) >= 2 and openai_api_key:
     clinical_trial_file = uploaded_files[0]
     patient_database_file = uploaded_files[1]
     
@@ -110,30 +114,27 @@ if len(uploaded_files) >= 2:
     selected_nct = st.selectbox("Select NCT Number", nct_numbers)
     selected_patient = st.selectbox("Select Patient Name", patient_names)
     
-    # Input OpenAI API Key
-    openai_api_key = st.text_input("Enter OpenAI API Key")
+    # Initialize LLM
+    llm = ChatOpenAI(openai_api_key=openai_api_key, model="gpt-4", temperature=0.1)
     
-    if openai_api_key:
-        llm = ChatOpenAI(openai_api_key=openai_api_key, model="gpt-4", temperature=0.1)
+    # Fetch and parse criteria for selected trial
+    criteria_text = fetch_trial_criteria(selected_nct)
+    if criteria_text:
+        parsed_criteria = parse_criteria(llm, criteria_text)
         
-        # Fetch and parse criteria for selected trial
-        criteria_text = fetch_trial_criteria(selected_nct)
-        if criteria_text:
-            parsed_criteria = parse_criteria(llm, criteria_text)
-            
-            # Display inclusion and exclusion criteria with eligibility
-            selected_patient_row = patient_df[patient_df['Patient Name'] == selected_patient].iloc[0]
-            
-            st.write("### Inclusion Criteria:")
-            for criterion in parsed_criteria['inclusion']:
-                eligibility = "Yes" if criterion.lower() in selected_patient_row['Primary Diagnosis'].lower() else "No"
-                st.write(f"**Criterion:** {criterion}")
-                st.write(f"**Is Patient Included:** {eligibility}")
-                st.write("")
-            
-            st.write("### Exclusion Criteria:")
-            for criterion in parsed_criteria['exclusion']:
-                eligibility = "Yes" if criterion.lower() in selected_patient_row['Primary Diagnosis'].lower() else "No"
-                st.write(f"**Criterion:** {criterion}")
-                st.write(f"**Is Patient Excluded:** {eligibility}")
-                st.write("")
+        # Display inclusion and exclusion criteria with eligibility
+        selected_patient_row = patient_df[patient_df['Patient Name'] == selected_patient].iloc[0]
+        
+        st.write("### Inclusion Criteria:")
+        for criterion in parsed_criteria['inclusion']:
+            eligibility = "Yes" if criterion.lower() in selected_patient_row['Primary Diagnosis'].lower() else "No"
+            st.write(f"**Criterion:** {criterion}")
+            st.write(f"**Is Patient Included:** {eligibility}")
+            st.write("")
+        
+        st.write("### Exclusion Criteria:")
+        for criterion in parsed_criteria['exclusion']:
+            eligibility = "Yes" if criterion.lower() in selected_patient_row['Primary Diagnosis'].lower() else "No"
+            st.write(f"**Criterion:** {criterion}")
+            st.write(f"**Is Patient Excluded:** {eligibility}")
+            st.write("")
