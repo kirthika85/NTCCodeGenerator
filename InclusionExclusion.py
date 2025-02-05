@@ -102,5 +102,3 @@ def main():
         else:
             st.warning("No valid criteria found in uploaded trials")
 
-if __name__ == "__main__":
-    main()
