@@ -6,6 +6,7 @@ from langchain.chat_models import ChatOpenAI
 
 # Function to validate NCT ID format
 def validate_nct_id(nct_id):
+    st.write(f"Validating NCT ID: {nct_id}")
     return (
         isinstance(nct_id, str) and 
         nct_id.startswith('NCT') and 
@@ -15,6 +16,7 @@ def validate_nct_id(nct_id):
 
 # Function to fetch trial criteria from ClinicalTrials.gov API
 def fetch_trial_criteria(nct_id):
+    st.write(f"Fetching criteria for {nct_id}...")
     api_url = f"https://clinicaltrials.gov/api/v2/studies/{nct_id}"
     params = {
         "format": "json",
@@ -52,6 +54,7 @@ def fetch_trial_criteria(nct_id):
 
 # Function to parse criteria text using LLM
 def parse_criteria(llm, criteria_text):
+    st.write("Parsing criteria text...")
     if not criteria_text or len(criteria_text.strip()) < 50:
         return {"inclusion": [], "exclusion": []}
     
@@ -83,6 +86,7 @@ def parse_criteria(llm, criteria_text):
 
 # Function to correlate patients with trials
 def correlate_patient_with_trial(patient_row, trial_row):
+    st.write("Correlating patient with trial...")
     patient_diagnosis_words = patient_row['Primary Diagnosis'].lower().split()
     criteria_words = trial_row['Criteria'].lower().split()
     
@@ -99,6 +103,7 @@ with st.sidebar:
 uploaded_files = st.file_uploader("Upload files", type=["xlsx", "xls", "csv"], accept_multiple_files=True)
 
 if len(uploaded_files) >= 2 and openai_api_key:
+    st.write("Files uploaded successfully.")
     clinical_trial_file = uploaded_files[0]
     patient_database_file = uploaded_files[1]
     
@@ -124,6 +129,7 @@ if len(uploaded_files) >= 2 and openai_api_key:
         # Fetch and parse criteria for selected trial
         criteria_text = fetch_trial_criteria(selected_nct)
         if criteria_text:
+            st.write("Criteria text fetched successfully.")
             parsed_criteria = parse_criteria(llm, criteria_text)
             
             # Display inclusion and exclusion criteria with eligibility
