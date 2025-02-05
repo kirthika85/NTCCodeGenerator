@@ -6,7 +6,6 @@ from langchain.chat_models import ChatOpenAI
 
 # Function to validate NCT ID format
 def validate_nct_id(nct_id):
-    st.write(f"Validating NCT ID: {nct_id}")
     return (
         isinstance(nct_id, str) and 
         nct_id.startswith('NCT') and 
@@ -16,7 +15,6 @@ def validate_nct_id(nct_id):
 
 # Function to fetch trial criteria from ClinicalTrials.gov API
 def fetch_trial_criteria(nct_id):
-    st.write(f"Fetching criteria for {nct_id}...")
     api_url = f"https://clinicaltrials.gov/api/v2/studies/{nct_id}"
     params = {
         "format": "json",
@@ -54,7 +52,6 @@ def fetch_trial_criteria(nct_id):
 
 # Function to parse criteria text using LLM
 def parse_criteria(llm, criteria_text):
-    st.write("Parsing criteria text...")
     if not criteria_text or len(criteria_text.strip()) < 50:
         return {"inclusion": [], "exclusion": []}
     
@@ -86,7 +83,6 @@ def parse_criteria(llm, criteria_text):
 
 # Function to correlate patients with trials
 def correlate_patient_with_trial(patient_row, trial_row):
-    st.write("Correlating patient with trial...")
     patient_diagnosis_words = patient_row['Primary Diagnosis'].lower().split()
     criteria_words = trial_row['Criteria'].lower().split()
     
@@ -103,7 +99,6 @@ with st.sidebar:
 uploaded_files = st.file_uploader("Upload files", type=["xlsx", "xls", "csv"], accept_multiple_files=True)
 
 if len(uploaded_files) >= 2 and openai_api_key:
-    st.write("Files uploaded successfully.")
     clinical_trial_file = uploaded_files[0]
     patient_database_file = uploaded_files[1]
     
@@ -129,24 +124,34 @@ if len(uploaded_files) >= 2 and openai_api_key:
         # Fetch and parse criteria for selected trial
         criteria_text = fetch_trial_criteria(selected_nct)
         if criteria_text:
-            st.write("Criteria text fetched successfully.")
             parsed_criteria = parse_criteria(llm, criteria_text)
             
-            # Display inclusion and exclusion criteria with eligibility
-            selected_patient_row = patient_df[patient_df['Patient Name'] == selected_patient].iloc[0]
+            # Display inclusion criteria in a table
+            inclusion_table = []
+            for i, criterion in enumerate(parsed_criteria['inclusion'], start=1):
+                eligibility = "Yes" if criterion.lower() in patient_df[patient_df['Patient Name'] == selected_patient].iloc[0]['Primary Diagnosis'].lower() else "No"
+                inclusion_table.append({
+                    'Criterion #': i,
+                    'Inclusion Criterion': criterion,
+                    'Is Patient Included': eligibility
+                })
             
+            inclusion_df = pd.DataFrame(inclusion_table)
             st.write("### Inclusion Criteria:")
-            for criterion in parsed_criteria['inclusion']:
-                eligibility = "Yes" if criterion.lower() in selected_patient_row['Primary Diagnosis'].lower() else "No"
-                st.write(f"**Criterion:** {criterion}")
-                st.write(f"**Is Patient Included:** {eligibility}")
-                st.write("")
+            st.dataframe(inclusion_df)
             
+            # Display exclusion criteria in a table
+            exclusion_table = []
+            for i, criterion in enumerate(parsed_criteria['exclusion'], start=1):
+                eligibility = "Yes" if criterion.lower() in patient_df[patient_df['Patient Name'] == selected_patient].iloc[0]['Primary Diagnosis'].lower() else "No"
+                exclusion_table.append({
+                    'Criterion #': i,
+                    'Exclusion Criterion': criterion,
+                    'Is Patient Excluded': eligibility
+                })
+            
+            exclusion_df = pd.DataFrame(exclusion_table)
             st.write("### Exclusion Criteria:")
-            for criterion in parsed_criteria['exclusion']:
-                eligibility = "Yes" if criterion.lower() in selected_patient_row['Primary Diagnosis'].lower() else "No"
-                st.write(f"**Criterion:** {criterion}")
-                st.write(f"**Is Patient Excluded:** {eligibility}")
-                st.write("")
+            st.dataframe(exclusion_df)
         else:
             st.error("No eligibility criteria found for the selected trial.")
