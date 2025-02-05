@@ -120,10 +120,6 @@ def correlate_patient_with_trial(llm, patient_row, criterion):
         st.error(f"Error determining eligibility: {str(e)}")
         return "Unknown"
 
-# Sidebar for OpenAI API Key
-with st.sidebar:
-    openai_api_key = st.text_input("Enter OpenAI API Key")
-
 #Main Funciton
 st.set_page_config(page_title="Patient Trial Eligibility Checker", page_icon="🩺", layout="wide")
 #st.image("Mool.png", width=100)
@@ -137,6 +133,11 @@ with col2:
         "<h1 style='margin-top: 10px;'>Patient Trial Eligibility Checker</h1>",
         unsafe_allow_html=True
     )
+
+# Sidebar for OpenAI API Key
+with st.sidebar:
+    openai_api_key = st.text_input("Enter OpenAI API Key")
+
 
 
 # Load files
