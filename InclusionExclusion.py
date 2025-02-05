@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 import json
-from langchain_community  import ChatOpenAI
+from langchain.chat_models import ChatOpenAI
 from io import StringIO
 
 def fetch_trial_criteria(nct_id):
