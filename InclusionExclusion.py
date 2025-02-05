@@ -82,14 +82,40 @@ def parse_criteria(llm, criteria_text):
         return {"inclusion": [], "exclusion": []}
 
 # Function to correlate patients with trials
-def correlate_patient_with_trial(patient_row, trial_row):
-    patient_diagnosis_words = patient_row['Primary Diagnosis'].lower().split()
-    criteria_words = trial_row['Criteria'].lower().split()
+def correlate_patient_with_trial(llm, patient_row, criterion):
+    """Use LLM to determine if a patient meets a specific criterion."""
     
-    if any(word in criteria_words for word in patient_diagnosis_words):
-        return "Yes"
-    else:
-        return "No"
+    # Prepare patient information
+    patient_info = {
+        'primary_diagnosis': patient_row['Primary Diagnosis'],
+        'secondary_diagnosis': patient_row['Secondary Diagnosis'],
+        'prescription': patient_row['Prescription'],
+        'jcode': patient_row['JCode']
+    }
+    
+    # Construct prompt for LLM
+    prompt = f"""
+    Determine if the patient meets the following criterion based on their medical information:
+
+    **Patient Information:**
+    - Primary Diagnosis: {patient_info['primary_diagnosis']}
+    - Secondary Diagnosis: {patient_info['secondary_diagnosis']}
+    - Prescription: {patient_info['prescription']}
+    - JCode: {patient_info['jcode']}
+
+    **Criterion:**
+    {criterion}
+
+    Is the patient eligible? Yes or No.
+    """
+    
+    try:
+        result = llm.invoke(prompt).content
+        eligibility = result.strip('` \n')
+        return eligibility
+    except Exception as e:
+        st.error(f"Error determining eligibility: {str(e)}")
+        return "Unknown"
 
 # Sidebar for OpenAI API Key
 with st.sidebar:
@@ -128,8 +154,9 @@ if len(uploaded_files) >= 2 and openai_api_key:
             
             # Display inclusion criteria in a table
             inclusion_table = []
+            selected_patient_row = patient_df[patient_df['Patient Name'] == selected_patient].iloc[0]
             for i, criterion in enumerate(parsed_criteria['inclusion'], start=1):
-                eligibility = "Yes" if criterion.lower() in patient_df[patient_df['Patient Name'] == selected_patient].iloc[0]['Primary Diagnosis'].lower() else "No"
+                eligibility = correlate_patient_with_trial(llm, selected_patient_row, criterion)
                 inclusion_table.append({
                     'Criterion #': i,
                     'Inclusion Criterion': criterion,
@@ -143,7 +170,7 @@ if len(uploaded_files) >= 2 and openai_api_key:
             # Display exclusion criteria in a table
             exclusion_table = []
             for i, criterion in enumerate(parsed_criteria['exclusion'], start=1):
-                eligibility = "Yes" if criterion.lower() in patient_df[patient_df['Patient Name'] == selected_patient].iloc[0]['Primary Diagnosis'].lower() else "No"
+                eligibility = correlate_patient_with_trial(llm, selected_patient_row, criterion)
                 exclusion_table.append({
                     'Criterion #': i,
                     'Exclusion Criterion': criterion,
