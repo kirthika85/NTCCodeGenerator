@@ -95,13 +95,15 @@ def correlate_patients_with_trials(patient_df, trial_df):
                 matched_criteria = [word for word in patient_diagnosis_words if word in criteria_words]
                 
                 if matched_criteria:
+                    # Ensure matched criteria are correctly extracted and stored
+                    matched_criteria_text = ', '.join(matched_criteria)
                     correlated_results.append({
                         'Patient Name': patient_row['Patient Name'],
                         'Patient ID': patient_row['Patient ID'],
                         'NCT Number': trial_row['NCT Number'],
                         'Study Title': trial_row['Study Title'],
                         'Type': 'Eligible',
-                        'Matched Criteria': ', '.join(matched_criteria),  # Correctly join matched criteria
+                        'Matched Criteria': matched_criteria_text,  # Store the actual matched criteria text
                         'Criteria Type': 'Inclusion',
                         'Full Criteria': trial_row['Criteria']
                     })
@@ -112,13 +114,15 @@ def correlate_patients_with_trials(patient_df, trial_df):
                 matched_criteria = [word for word in patient_diagnosis_words if word in criteria_words]
                 
                 if matched_criteria:
+                    # Ensure matched criteria are correctly extracted and stored
+                    matched_criteria_text = ', '.join(matched_criteria)
                     correlated_results.append({
                         'Patient Name': patient_row['Patient Name'],
                         'Patient ID': patient_row['Patient ID'],
                         'NCT Number': trial_row['NCT Number'],
                         'Study Title': trial_row['Study Title'],
                         'Type': 'Not Eligible',
-                        'Matched Criteria': ', '.join(matched_criteria),  # Correctly join matched criteria
+                        'Matched Criteria': matched_criteria_text,  # Store the actual matched criteria text
                         'Criteria Type': 'Exclusion',
                         'Full Criteria': trial_row['Criteria']
                     })
