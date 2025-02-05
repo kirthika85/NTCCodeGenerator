@@ -117,24 +117,30 @@ if len(uploaded_files) >= 2 and openai_api_key:
     # Initialize LLM
     llm = ChatOpenAI(openai_api_key=openai_api_key, model="gpt-4", temperature=0.1)
     
-    # Fetch and parse criteria for selected trial
-    criteria_text = fetch_trial_criteria(selected_nct)
-    if criteria_text:
-        parsed_criteria = parse_criteria(llm, criteria_text)
+    # Button to check eligibility
+    if st.button("Check Eligibility"):
+        st.write("Checking eligibility...")
         
-        # Display inclusion and exclusion criteria with eligibility
-        selected_patient_row = patient_df[patient_df['Patient Name'] == selected_patient].iloc[0]
-        
-        st.write("### Inclusion Criteria:")
-        for criterion in parsed_criteria['inclusion']:
-            eligibility = "Yes" if criterion.lower() in selected_patient_row['Primary Diagnosis'].lower() else "No"
-            st.write(f"**Criterion:** {criterion}")
-            st.write(f"**Is Patient Included:** {eligibility}")
-            st.write("")
-        
-        st.write("### Exclusion Criteria:")
-        for criterion in parsed_criteria['exclusion']:
-            eligibility = "Yes" if criterion.lower() in selected_patient_row['Primary Diagnosis'].lower() else "No"
-            st.write(f"**Criterion:** {criterion}")
-            st.write(f"**Is Patient Excluded:** {eligibility}")
-            st.write("")
+        # Fetch and parse criteria for selected trial
+        criteria_text = fetch_trial_criteria(selected_nct)
+        if criteria_text:
+            parsed_criteria = parse_criteria(llm, criteria_text)
+            
+            # Display inclusion and exclusion criteria with eligibility
+            selected_patient_row = patient_df[patient_df['Patient Name'] == selected_patient].iloc[0]
+            
+            st.write("### Inclusion Criteria:")
+            for criterion in parsed_criteria['inclusion']:
+                eligibility = "Yes" if criterion.lower() in selected_patient_row['Primary Diagnosis'].lower() else "No"
+                st.write(f"**Criterion:** {criterion}")
+                st.write(f"**Is Patient Included:** {eligibility}")
+                st.write("")
+            
+            st.write("### Exclusion Criteria:")
+            for criterion in parsed_criteria['exclusion']:
+                eligibility = "Yes" if criterion.lower() in selected_patient_row['Primary Diagnosis'].lower() else "No"
+                st.write(f"**Criterion:** {criterion}")
+                st.write(f"**Is Patient Excluded:** {eligibility}")
+                st.write("")
+        else:
+            st.error("No eligibility criteria found for the selected trial.")
