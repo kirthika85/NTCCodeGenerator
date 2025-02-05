@@ -37,24 +37,22 @@ def parse_criteria(llm, criteria_text):
         st.error(f"Parsing error: {str(e)}")
         return {"inclusion": [], "exclusion": []}
 
+# Streamlit UI Components (FIXED INDENTATION)
+st.title("Clinical Trial Criteria Batch Processor")
+openai_api_key = st.sidebar.text_input('OpenAI API Key', type='password')
 
-    st.title("Clinical Trial Criteria Batch Processor")
-    openai_api_key = st.sidebar.text_input('OpenAI API Key', type='password')
+# File upload section
+uploaded_file = st.file_uploader("Upload CSV file", type=["csv"],
+                                help="CSV must contain 'NCT Code' and 'Study Name' columns")
+
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
+    required_cols = {'NCT Code', 'Study Name'}
     
-    # File upload section
-    uploaded_file = st.file_uploader("Upload CSV file", type=["csv"],
-                                     help="CSV must contain 'NCT Code' and 'Study Name' columns")
-    
-    
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
-        required_cols = {'NCT Code', 'Study Name'}
-        
-        if not required_cols.issubset(df.columns):
-            st.error("CSV must contain 'NCT Code' and 'Study Name' columns")
-            return
-            
-        llm = ChatOpenAI(openai_api_key=openai_api_key,model="gpt-4", temperature=0.1)
+    if not required_cols.issubset(df.columns):
+        st.error("CSV must contain 'NCT Code' and 'Study Name' columns")
+    else:
+        llm = ChatOpenAI(openai_api_key=openai_api_key, model="gpt-4", temperature=0.1)
         results = []
         
         with st.status("Processing trials...", expanded=True) as status:
@@ -102,4 +100,3 @@ def parse_criteria(llm, criteria_text):
             )
         else:
             st.warning("No valid criteria found in uploaded trials")
-
