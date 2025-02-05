@@ -5,14 +5,26 @@ import json
 from langchain.chat_models import ChatOpenAI
 
 def fetch_trial_criteria(nct_id):
-    """Retrieve eligibility criteria from ClinicalTrials.gov API"""
-    api_url = f"https://clinicaltrials.gov/api/v2/studies/{nct_id}"
+    """Retrieve eligibility criteria from ClinicalTrials.gov API v2"""
+    api_url = f"https://clinicaltrials.gov/api/v2/studies/{nct_id}?format=json&version=2.0.1"
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "ClinicalTrialsProcessor/1.0 (your-contact@email.com)"
+    }
     try:
-        response = requests.get(api_url, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            return data['studies'][0]['protocolSection']['eligibilityModule']['eligibilityCriteria']
-        return None
+        response = requests.get(api_url, headers=headers, timeout=15)
+        if response.status_code != 200:
+            st.error(f"API Error {response.status_code} for {nct_id}")
+            return None
+        
+        data = response.json()
+        
+        # Verify NCT ID matches request
+        if data.get('protocolSection', {}).get('identificationModule', {}).get('nctId') != nct_id:
+            st.error(f"NCT ID mismatch in response for {nct_id}")
+            return None
+        
+        return data.get('protocolSection', {}).get('eligibilityModule', {}).get('eligibilityCriteria')
     except Exception as e:
         st.error(f"Error fetching data for {nct_id}: {str(e)}")
         return None
@@ -45,13 +57,12 @@ uploaded_file = st.file_uploader("Upload File", type=["xlsx", "xls", "csv"],
 if uploaded_file:
     try:
         if uploaded_file.name.endswith(('.xlsx', '.xls')):
-            df = pd.read_excel(uploaded_file)
+            df = pd.read_excel(uploaded_file, engine='openpyxl')
         else:
-            # Handle CSV with proper encoding
             df = pd.read_csv(uploaded_file, 
-                           encoding='utf-8-sig',  # Handles BOM markers
-                           engine='python')        # Better error handling
-            
+                           encoding='utf-8-sig',
+                           engine='python')
+        
         required_cols = {'NCT Number', 'Study Title'}
         
         if not required_cols.issubset(df.columns):
@@ -71,22 +82,14 @@ if uploaded_file:
                     
                     parsed = parse_criteria(llm, criteria_text)
                     
-                    # Create structured entries
-                    for criterion in parsed.get('inclusion', []):
-                        results.append({
-                            'NCT NUmber': nct_id,
-                            'Study Title': row['Study Title'],
-                            'Type': 'Inclusion',
-                            'Criterion': criterion
-                        })
-                    
-                    for criterion in parsed.get('exclusion', []):
-                        results.append({
-                            'NCT Number': nct_id,
-                            'Study Title': row['Study Title'],
-                            'Type': 'Exclusion',
-                            'Criterion': criterion
-                        })
+                    for criterion_type in ['inclusion', 'exclusion']:
+                        for criterion in parsed.get(criterion_type, []):
+                            results.append({
+                                'NCT Number': nct_id,
+                                'Study Title': row['Study Title'],
+                                'Type': criterion_type.capitalize(),
+                                'Criterion': criterion
+                            })
                 
                 status.update(label="Processing complete!", state="complete")
             
@@ -98,14 +101,3 @@ if uploaded_file:
                 csv = output_df.to_csv(index=False).encode('utf-8')
                 st.download_button(
                     label="Download CSV Results",
-                    data=csv,
-                    file_name="clinical_trial_criteria.csv",
-                    mime="text/csv"
-                )
-            else:
-                st.warning("No valid criteria found in uploaded trials")
-                
-    except UnicodeDecodeError:
-        st.error("""Encoding error! Try:
-                1. Re-saving CSV with UTF-8 encoding
-                2. Try different encoding: pd.read_csv(..., encoding='latin1')""")
