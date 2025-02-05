@@ -103,7 +103,6 @@ def correlate_patients_with_trials(patient_df, trial_df):
                         'NCT Number': trial_row['NCT Number'],
                         'Study Title': trial_row['Study Title'],
                         'Type': 'Eligible',
-                        'Matched Criteria': matched_criteria_text,  # Store the actual matched criteria text
                         'Criteria Type': 'Inclusion',
                         'Full Criteria': trial_row['Criteria']
                     })
@@ -122,7 +121,6 @@ def correlate_patients_with_trials(patient_df, trial_df):
                         'NCT Number': trial_row['NCT Number'],
                         'Study Title': trial_row['Study Title'],
                         'Type': 'Not Eligible',
-                        'Matched Criteria': matched_criteria_text,  # Store the actual matched criteria text
                         'Criteria Type': 'Exclusion',
                         'Full Criteria': trial_row['Criteria']
                     })
