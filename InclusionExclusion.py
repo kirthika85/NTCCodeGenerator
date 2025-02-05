@@ -20,38 +20,42 @@ def fetch_trial_criteria(nct_id):
     api_url = f"https://clinicaltrials.gov/api/v2/studies/{quote(nct_id)}"
     params = {
         "format": "json",
-        "version": "2.0",  # Changed from 2.0.1 to match API response structure
-        "markupFormat": "html"  # Added to match example response format
+        "markupFormat": "markdown"  # Added from working curl example
     }
     headers = {
-        "Accept": "application/json",
+        "Accept": "text/csv, application/json",  # Mirror curl's accept header
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
     try:
         response = requests.get(api_url, headers=headers, params=params, timeout=15)
         
+        # Add verbose logging for API interaction
+        st.write(f"API Request Details:\nURL: {response.url}\nStatus: {response.status_code}\nHeaders: {response.headers}")
+        
         if response.status_code == 400:
-            st.error(f"Invalid request for {nct_id} - check API parameters")
+            st.error(f"Temporary API error for {nct_id} - try again later")
             return None
             
         if response.status_code != 200:
             st.error(f"API Error {response.status_code} for {nct_id}")
             return None
 
+        # Handle JSON despite text/csv accept header
         data = response.json()
         
-        # Validate API response structure based on search results example
-        if not data.get('protocolSection', {}).get('eligibilityModule'):
-            st.error(f"No eligibility criteria found for {nct_id}")
+        # Diagnostic output
+        if 'protocolSection' not in data:
+            st.error(f"Unexpected response structure for {nct_id}")
+            st.json(data)  # Show raw response for debugging
             return None
             
-        return data['protocolSection']['eligibilityModule'].get('eligibilityCriteria')
+        return data.get('protocolSection', {}).get('eligibilityModule', {}).get('eligibilityCriteria')
 
     except Exception as e:
         st.error(f"Error fetching {nct_id}: {str(e)}")
         return None
-
+ 
 def parse_criteria(llm, criteria_text):
     """Parse criteria text using LLM with enhanced validation"""
     if not criteria_text or len(criteria_text.strip()) < 50:
