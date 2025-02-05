@@ -55,14 +55,14 @@ if uploaded_file:
         required_cols = {'NCT Number', 'Study Title'}
         
         if not required_cols.issubset(df.columns):
-            st.error("Uploaded file must contain 'NCT Code' and 'Study Name' columns")
+            st.error("Uploaded file must contain 'NCT Number' and 'Study Title' columns")
         else:
             llm = ChatOpenAI(openai_api_key=openai_api_key, model="gpt-4", temperature=0.1)
             results = []
             
             with st.status("Processing trials...", expanded=True) as status:
                 for _, row in df.iterrows():
-                    nct_id = row['NCT Code'].strip()
+                    nct_id = row['NCT Number'].strip()
                     st.write(f"Processing {nct_id}...")
                     
                     criteria_text = fetch_trial_criteria(nct_id)
@@ -74,16 +74,16 @@ if uploaded_file:
                     # Create structured entries
                     for criterion in parsed.get('inclusion', []):
                         results.append({
-                            'NCT Code': nct_id,
-                            'Study Name': row['Study Name'],
+                            'NCT NUmber': nct_id,
+                            'Study Title': row['Study Title'],
                             'Type': 'Inclusion',
                             'Criterion': criterion
                         })
                     
                     for criterion in parsed.get('exclusion', []):
                         results.append({
-                            'NCT Code': nct_id,
-                            'Study Name': row['Study Name'],
+                            'NCT Number': nct_id,
+                            'Study Title': row['Study Title'],
                             'Type': 'Exclusion',
                             'Criterion': criterion
                         })
