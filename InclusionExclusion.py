@@ -191,8 +191,8 @@ if len(uploaded_files) >= 2 and openai_api_key:
             
             inclusion_df = pd.DataFrame(inclusion_table)
             st.write("### Inclusion Criteria:")
-            #st.dataframe(inclusion_df)
-            st.markdown(inclusion_df.to_string(index=False))
+            st.dataframe(inclusion_df)
+            
 
             inclusion_score_denominator = len(inclusion_table)
             if inclusion_score_denominator > 0:
@@ -218,8 +218,8 @@ if len(uploaded_files) >= 2 and openai_api_key:
             
             exclusion_df = pd.DataFrame(exclusion_table)
             st.write("### Exclusion Criteria:")
-            #st.dataframe(exclusion_df)
-            st.markdown(exclusion_df.to_string(index=False))
+            st.dataframe(exclusion_df)
+            
 
             
             exclusion_score_denominator = len(exclusion_table)
