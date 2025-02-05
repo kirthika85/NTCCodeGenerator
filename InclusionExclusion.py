@@ -37,8 +37,9 @@ def parse_criteria(llm, criteria_text):
         st.error(f"Parsing error: {str(e)}")
         return {"inclusion": [], "exclusion": []}
 
-def main():
+
     st.title("Clinical Trial Criteria Batch Processor")
+    openai_api_key = st.sidebar.text_input('OpenAI API Key', type='password')
     
     # File upload section
     uploaded_file = st.file_uploader("Upload CSV file", type=["csv"],
