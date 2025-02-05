@@ -87,16 +87,13 @@ def correlate_patients_with_trials(patient_df, trial_df):
     correlated_results = []
     
     for _, patient_row in patient_df.iterrows():
+        matched = False
         for _, trial_row in trial_df.iterrows():
             if trial_row['Type'] == 'Inclusion':
                 # Check if any word from the patient's diagnosis is in the inclusion criteria
                 patient_diagnosis_words = patient_row['Primary Diagnosis'].lower().split()
                 criteria_words = trial_row['Criteria'].lower().split()
-                matched_criteria = [word for word in patient_diagnosis_words if word in criteria_words]
-                
-                if matched_criteria:
-                    # Ensure matched criteria are correctly extracted and stored
-                    matched_criteria_text = ', '.join(matched_criteria)
+                if any(word in criteria_words for word in patient_diagnosis_words):
                     correlated_results.append({
                         'Patient Name': patient_row['Patient Name'],
                         'Patient ID': patient_row['Patient ID'],
@@ -106,15 +103,12 @@ def correlate_patients_with_trials(patient_df, trial_df):
                         'Criteria Type': 'Inclusion',
                         'Full Criteria': trial_row['Criteria']
                     })
+                    matched = True
             elif trial_row['Type'] == 'Exclusion':
                 # Check if any word from the patient's diagnosis is in the exclusion criteria
                 patient_diagnosis_words = patient_row['Primary Diagnosis'].lower().split()
                 criteria_words = trial_row['Criteria'].lower().split()
-                matched_criteria = [word for word in patient_diagnosis_words if word in criteria_words]
-                
-                if matched_criteria:
-                    # Ensure matched criteria are correctly extracted and stored
-                    matched_criteria_text = ', '.join(matched_criteria)
+                if any(word in criteria_words for word in patient_diagnosis_words):
                     correlated_results.append({
                         'Patient Name': patient_row['Patient Name'],
                         'Patient ID': patient_row['Patient ID'],
@@ -124,8 +118,21 @@ def correlate_patients_with_trials(patient_df, trial_df):
                         'Criteria Type': 'Exclusion',
                         'Full Criteria': trial_row['Criteria']
                     })
+                    matched = True
+        
+        if not matched:
+            correlated_results.append({
+                'Patient Name': patient_row['Patient Name'],
+                'Patient ID': patient_row['Patient ID'],
+                'NCT Number': 'No Match',
+                'Study Title': 'No Matching Trial',
+                'Type': 'Not Eligible',
+                'Criteria Type': 'No Criteria Match',
+                'Full Criteria': 'No matching criteria found'
+            })
     
     return pd.DataFrame(correlated_results)
+
 
 st.title("Clinical Trial Criteria Batch Processor")
 openai_api_key = st.sidebar.text_input('OpenAI API Key', type='password')
