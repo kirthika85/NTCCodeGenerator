@@ -1,71 +1,106 @@
 import streamlit as st
-import json
 import pandas as pd
+import requests
+import json
+from langchain.chat_models import ChatOpenAI
 from io import StringIO
 
-def parse_eligibility_criteria(uploaded_file):
+def fetch_trial_criteria(nct_id):
+    """Retrieve eligibility criteria from ClinicalTrials.gov API"""
+    api_url = f"https://clinicaltrials.gov/api/v2/studies/{nct_id}"
     try:
-        # Read and parse JSON
-        data = json.load(uploaded_file)
-        
-        # Extract NCT ID and criteria
-        nct_id = data['studies'][0]['protocolSection']['identificationModule']['nctId']
-        criteria = data['studies'][0]['protocolSection']['eligibilityModule']['eligibilityCriteria']
-
-        # Split criteria into inclusion/exclusion sections
-        sections = [s.strip() for s in criteria.split("Exclusion Criteria:")]
-        
-        # Process inclusion criteria
-        inclusion = [line.strip() for line in sections[0].split("*") if line.strip()]
-        inclusion = [line for line in inclusion if not line.startswith("Inclusion Criteria:")]
-
-        # Process exclusion criteria
-        exclusion = [line.strip() for line in sections[1].split("*") if line.strip()]
-        
-        return nct_id, inclusion, exclusion
-
+        response = requests.get(api_url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            return data['studies'][0]['protocolSection']['eligibilityModule']['eligibilityCriteria']
+        return None
     except Exception as e:
-        st.error(f"Error processing file: {str(e)}")
-        return None, [], []
+        st.error(f"Error fetching data for {nct_id}: {str(e)}")
+        return None
 
-# Streamlit App
-st.title("Clinical Trial Criteria Processor")
-st.subheader("Upload JSON file to extract inclusion/exclusion criteria")
-
-uploaded_file = st.file_uploader("Choose a JSON file", type="json")
-
-if uploaded_file:
-    nct_id, inclusion, exclusion = parse_eligibility_criteria(uploaded_file)
+def parse_criteria(llm, criteria_text):
+    """Parse criteria text using LLM with enhanced prompting"""
+    prompt = f"""Convert this clinical trial criteria into JSON format with separate inclusion/exclusion lists.
+    Use exactly this structure:
+    {{
+        "inclusion": ["list", "of", "criteria"],
+        "exclusion": ["list", "of", "criteria"]
+    }}
     
-    if nct_id:
-        st.success(f"Successfully processed: {nct_id}")
+    Input Text:
+    {criteria_text}
+    """
+    try:
+        result = llm.invoke(prompt).content
+        return json.loads(result.strip('` \n'))
+    except Exception as e:
+        st.error(f"Parsing error: {str(e)}")
+        return {"inclusion": [], "exclusion": []}
+
+def main():
+    st.title("Clinical Trial Criteria Batch Processor")
+    
+    # File upload section
+    uploaded_file = st.file_uploader("Upload CSV file", type=["csv"],
+                                     help="CSV must contain 'NCT Code' and 'Study Name' columns")
+    
+    
+    if uploaded_file:
+        df = pd.read_csv(uploaded_file)
+        required_cols = {'NCT Code', 'Study Name'}
         
-        # Create DataFrame
-        criteria_list = []
-        for item in inclusion:
-            criteria_list.append({"Type": "Inclusion", "Criterion": item})
-        for item in exclusion:
-            criteria_list.append({"Type": "Exclusion", "Criterion": item})
+        if not required_cols.issubset(df.columns):
+            st.error("CSV must contain 'NCT Code' and 'Study Name' columns")
+            return
             
-        df = pd.DataFrame(criteria_list)
+        llm = ChatOpenAI(openai_api_key=openai_api_key,model="gpt-4", temperature=0.1)
+        results = []
         
-        # Display results
-        st.subheader("Criteria Overview")
-        st.dataframe(df)
-        
-        # Create downloadable CSV
-        csv = df.to_csv(index=False)
-        st.download_button(
-            label="Download CSV",
-            data=csv,
-            file_name=f"{nct_id}_criteria.csv",
-            mime="text/csv"
-        )
-        
-        # Show raw criteria
-        with st.expander("View Raw Criteria"):
-            st.write("### Inclusion Criteria")
-            st.write("\n".join(f"- {item}" for item in inclusion))
+        with st.status("Processing trials...", expanded=True) as status:
+            for _, row in df.iterrows():
+                nct_id = row['NCT Code'].strip()
+                st.write(f"Processing {nct_id}...")
+                
+                criteria_text = fetch_trial_criteria(nct_id)
+                if not criteria_text:
+                    continue
+                
+                parsed = parse_criteria(llm, criteria_text)
+                
+                # Create structured entries
+                for criterion in parsed.get('inclusion', []):
+                    results.append({
+                        'NCT Code': nct_id,
+                        'Study Name': row['Study Name'],
+                        'Type': 'Inclusion',
+                        'Criterion': criterion
+                    })
+                
+                for criterion in parsed.get('exclusion', []):
+                    results.append({
+                        'NCT Code': nct_id,
+                        'Study Name': row['Study Name'],
+                        'Type': 'Exclusion',
+                        'Criterion': criterion
+                    })
             
-            st.write("### Exclusion Criteria")
-            st.write("\n".join(f"- {item}" for item in exclusion))
+            status.update(label="Processing complete!", state="complete")
+        
+        if results:
+            output_df = pd.DataFrame(results)
+            st.subheader("Preview (First 10 Rows)")
+            st.dataframe(output_df.head(10))
+            
+            # Generate CSV
+            csv = output_df.to_csv(index=False)
+            st.download_button(
+                label="Download Full Results",
+                data=csv,
+                file_name="clinical_trial_criteria.csv",
+                mime="text/csv"
+            )
+        else:
+            st.warning("No valid criteria found in uploaded trials")
+
+if __name__ == "__main__":
+    main()
