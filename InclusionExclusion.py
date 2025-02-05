@@ -175,21 +175,24 @@ if len(uploaded_files) >= 2 and openai_api_key:
             inclusion_table = []
             selected_patient_row = patient_df[patient_df['Patient Name'] == selected_patient].iloc[0]
             inclusion_score_numerator=0
+            criterion_number = 1
             for i, criterion in enumerate(parsed_criteria['inclusion'], start=1):
                 if criterion.strip().lower().startswith("registration #"):
                     continue
                 eligibility = correlate_patient_with_trial(llm, selected_patient_row, criterion)
                 inclusion_table.append({
-                    'Criterion #': i,
+                    'Criterion': criterion_number,
                     'Inclusion Criterion': criterion,
                     'Is Patient Included': eligibility
                 })
+                criterion_number += 1
                 if eligibility == "Yes":
                     inclusion_score_numerator += 1
             
             inclusion_df = pd.DataFrame(inclusion_table)
             st.write("### Inclusion Criteria:")
-            st.dataframe(inclusion_df)
+            #st.dataframe(inclusion_df)
+            st.markdown(inclusion_df.to_string(index=False))
 
             inclusion_score_denominator = len(inclusion_table)
             if inclusion_score_denominator > 0:
@@ -201,19 +204,23 @@ if len(uploaded_files) >= 2 and openai_api_key:
             # Display exclusion criteria in a table
             exclusion_table = []
             exclusion_score_numerator=0
+            criterion_number = 1
             for i, criterion in enumerate(parsed_criteria['exclusion'], start=1):
                 eligibility = correlate_patient_with_trial(llm, selected_patient_row, criterion)
                 exclusion_table.append({
-                    'Criterion #': i,
+                    'Criterion': criterion_number,
                     'Exclusion Criterion': criterion,
                     'Is Patient Excluded': eligibility
                 })
+                criterion_number += 1
                 if eligibility == "Yes":
                     exclusion_score_numerator += 1
             
             exclusion_df = pd.DataFrame(exclusion_table)
             st.write("### Exclusion Criteria:")
-            st.dataframe(exclusion_df)
+            #st.dataframe(exclusion_df)
+            st.markdown(exclusion_df.to_string(index=False))
+
             
             exclusion_score_denominator = len(exclusion_table)
             if exclusion_score_denominator > 0:
