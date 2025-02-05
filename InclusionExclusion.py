@@ -95,7 +95,7 @@ def correlate_patient_with_trial(llm, patient_row, criterion):
     
     # Construct prompt for LLM
     prompt = f"""
-    Determine if the patient meets the following criterion based on their medical information:
+    Determine if the patient meets the following criterion based on their medical information.Answer with "Yes" or "No" only.
 
     **Patient Information:**
     - Primary Diagnosis: {patient_info['primary_diagnosis']}
@@ -106,13 +106,16 @@ def correlate_patient_with_trial(llm, patient_row, criterion):
     **Criterion:**
     {criterion}
 
-    Is the patient eligible? Yes or No.
+    Is the patient eligible?
     """
     
     try:
         result = llm.invoke(prompt).content
         eligibility = result.strip('` \n')
-        return eligibility
+        if eligibility.lower() not in ['yes', 'no']:
+            return "No"  # Default to "No" if response is not clear
+            
+        return eligibility.capitalize()
     except Exception as e:
         st.error(f"Error determining eligibility: {str(e)}")
         return "Unknown"
