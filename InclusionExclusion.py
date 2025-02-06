@@ -4,6 +4,7 @@ import requests
 import json
 from langchain.chat_models import ChatOpenAI
 import os
+import time
 
 # Function to validate NCT ID format
 def validate_nct_id(nct_id):
